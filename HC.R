@@ -1,22 +1,23 @@
 #Load DATA=======
 library(tidyverse)
-setwd("~/00DeakinUni/R/BCL_R/BCL/HC")
 hc <- read.csv("hc.csv") #read in HydroCarbon data
 sc <- read.csv("StonyCreek.csv") # read in CN data
 
 #Compute mean dry.fraction + mean C_percent:
-sc_high <- filter (sc, Elevation =="High" & habitat =="mangrove") %>%
+sc_high <- filter (sc, Elevation =="High" & habitat =="mangrove") %>% #all hc cores were taken at High elevation
   group_by(SampleID_hc) %>%
   summarise_at(vars(CompactionIn, CompactionOut, C_percent, Dry_Fraction),mean)
 
 #Join HC and CN data
 #Estimate PAH and TPH per dry mass:
-hc_dry <- left_join(hc,sc_high, by = "SampleID_hc") %>% #join data with Dry Fraction
+hc_dry <- left_join(hc,sc_high, by = "SampleID_hc") #join data with Dry Fraction
+  
+hc_dry <- hc_dry %>%
   mutate_at(vars(Naphthalene:Total), function(x, na.rm=T)(x * hc_dry$Dry_Fraction )) #estimate mg/kg per dry mass
 
 #Normalize PAG & TPH per Total Organic Carbon:=====
 hc_dry_norm <- hc_dry %>%
-  mutate(Nap = Naphthalene * C_percent,
+  mutate(Nap = Naphthalene / C_percent,
          Met = X2.Methylnaphthalene /C_percent,
          Acy = Acenaphthylene / C_percent,
          Ace = Acenaphthene / C_percent,
@@ -34,9 +35,7 @@ hc_dry_norm <- hc_dry %>%
          TPH_10to14 = TPH_C10.14 / C_percent,
          TPH_15to28 = TPH_C15.28 / C_percent ,
          TPH_29to36 = TPH_C29.36 / C_percent ,
-         TPH_36toMore = TPH_C.36/ C_percent ,
-         TotPAH = Nap+Met+Acy+Ace+Flu+Pyr+BaA+Chr+BbG+BkF+BaP+IcdP+DahA+BghiP,
-         TotTPH = TPH_06to09+TPH_10to14+TPH_15to28+TPH_29to36+TPH_36toMore)
+         TPH_36toMore = TPH_C.36/ C_percent)
 
 hc_dry_norm$Total_norm <- rowSums(hc_dry_norm[,42:60]) #Normalized Total Hydrocarbons
 hc_dry_norm$TotPAH_norm <- rowSums(hc_dry_norm[,42:55])#Normalized Total PAH only
