@@ -97,3 +97,29 @@ ggsave(filename = "TPH_MeanContent.jpeg",
        height = 9,
        units = "cm",
        dpi = 600)
+
+
+#Stack Bar of PAH at three sites============
+hc_dry_stack <- hc_dry_norm %>%
+  group_by(SiteYear) %>%
+  summarise_at( vars(Nap:BghiP), sum, na.rm=T) %>%
+  gather(PAH_Type, content, -SiteYear)
+
+ggplot(hc_dry_stack, aes(x = PAH_Type, y = content, fill = SiteYear)) + 
+  geom_bar(position = "fill",stat = "identity") +
+  scale_y_continuous(labels = scales::percent_format())+
+  
+  labs(x = "PAH Type",y="Abundance (%)", fill = "Arrival Time")+
+  theme(axis.text.x=element_text(vjust=0.5,size=12, face="bold", colour = "black", angle = 45),
+        axis.text.y=element_text(size=8,colour = "black"),
+        axis.title.y=element_text(size=14,colour = "black",face = "bold",),
+        axis.title.x=element_text(size=14, face = "bold", hjust = 0.5),
+        legend.position = "right",
+        strip.text=element_text(size=18))
+
+ggsave(filename = "PAH_Stack.jpeg", 
+       width = 17, 
+       height = 9,
+       units = "cm",
+       dpi = 600)
+
