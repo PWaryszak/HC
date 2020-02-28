@@ -15,7 +15,7 @@ sc_high <- filter (sc, Elevation =="High" & habitat =="mangrove") %>% #all hc co
 hc_dry <- left_join(hc,sc_high, by = "SampleID_hc") #join data with Dry Fraction
   
 hc_dry <- hc_dry %>%
-  mutate_at(vars(Naphthalene:Total), function(x, na.rm=T)(x * hc_dry$Dry_Fraction )) #estimate mg/kg per dry mass
+  mutate_at(vars(Naphthalene:Total), function(x, na.rm=T)(x / hc_dry$Dry_Fraction )) #estimate mg/kg per dry mass
 
 #Normalize PAG & TPH per Total Organic Carbon:=====
 #Total Organic Carbon comes from Maria's CN-analysis of 9 replicate cores (Mean C-values per Depth reps).
@@ -24,11 +24,14 @@ hc_dry_norm <- hc_dry %>%
          Met = X2.Methylnaphthalene /C_percent,
          Acy = Acenaphthylene / C_percent,
          Ace = Acenaphthene / C_percent,
+         Ant = Anthracene / C_percent,
          Flu = Fluorene / C_percent,
+         Flt = Fluoranthene / C_percent,
+         Phe = Phenanthrene/C_percent,
          Pyr = Pyrene / C_percent,
          BaA = Benzaanthracene / C_percent,
          Chr = Chrysene / C_percent,
-         BbG = Benzobfluoranthene / C_percent,
+         BbF = Benzobfluoranthene / C_percent,
          BkF = Benzokfluoranthene / C_percent,
          BaP = Benzoapyrene / C_percent,
          IcdP = Indeno1.2.3c.dpyrene / C_percent,
@@ -40,8 +43,8 @@ hc_dry_norm <- hc_dry %>%
          TPH_29to36 = TPH_C29.36 / C_percent ,
          TPH_36toMore = TPH_C.36/ C_percent)
 
-hc_dry_norm$Total_norm <- rowSums(hc_dry_norm[,42:60]) #Normalized Total Hydrocarbons
-hc_dry_norm$TotPAH_norm <- rowSums(hc_dry_norm[,42:55])#Normalized Total PAH only
+hc_dry_norm$Total_norm <- rowSums(hc_dry_norm[,58:63]) #Normalized Total Hydrocarbons
+hc_dry_norm$TotPAH_norm <- rowSums(hc_dry_norm[,42:58])#Normalized Total PAH only
 
 #PAH relative abundance:=======
 hc_dry_norm2 <- hc_dry_norm %>%
@@ -64,7 +67,7 @@ ggplot(data = hc_dry_norm2, aes( y = value, x = Site)) +
         strip.text=element_text(size=11))
 
 ggsave(filename = "PAH_RelativeAbundance.jpeg", 
-      width = 19, 
+      width = 21, 
       height = 8,
       units = "cm",
       dpi = 600)
@@ -93,6 +96,7 @@ h1_plot <- ggplot(h1,aes(x= reorder(Depth_Range, desc(Depth_Range)), y=Mean_TPH 
         axis.title.x=element_text(size=14, face = "bold", hjust = 0.5),
         legend.position = "none",
         strip.text=element_text(size=18))
+
 h1_plot
 
 ggsave(filename = "TPH_MeanContentGOOD.jpeg", 
@@ -117,6 +121,7 @@ h2_plot <- ggplot(h2,aes(x= reorder(Depth_Range, desc(Depth_Range)), y=Mean_PAH 
   geom_line(aes(color=as.factor(Year)),size = 1.2, alpha = 0.4)+
   facet_grid( as.factor(Year) ~ .)+ 
   geom_hline(aes(yintercept = 50), linetype="dashed") + #50 mg/kg is PAH toxicity threshold
+  #or 50000/kg as per web: https://www.waterquality.gov.au/anz-guidelines/guideline-values/default/sediment-quality-toxicants
   theme_bw()+
   coord_flip()+
   #ggtitle("PAH @ Stony Creek (mg/kg)")+
@@ -128,7 +133,7 @@ h2_plot <- ggplot(h2,aes(x= reorder(Depth_Range, desc(Depth_Range)), y=Mean_PAH 
         strip.text=element_text(size=18))
 h2_plot
 
-ggsave(filename = "PAH_MeanContentGOOD.jpeg", 
+ggsave(filename = "PAH_MeanContentGOOD_DividedByDRyFraction.jpeg", 
        width = 17, 
        height = 9,
        units = "cm",
@@ -148,7 +153,7 @@ ggsave(g, filename = "PAH_TPH_MeanContentPerDepthGOOD.jpeg",
 #Stack Bar of PAH at three sites============
 hc_dry_stack_pah <- hc_dry_norm %>%
   group_by(SiteYear) %>%
-  summarise_at( vars(Nap:BghiP), sum, na.rm=T) %>% #Compute sum of all PAH-s per column
+  summarise_at( vars(Nap:BghiP), sum, na.rm=T) %>% #Compute sum of all HC-s per column
   gather(PAH_Type, content, -SiteYear) #Prep long format for stack-plotting.
 
 pah_stack <- ggplot(hc_dry_stack_pah, aes(x = PAH_Type, y = content, fill = SiteYear)) + 
@@ -169,6 +174,8 @@ ggsave(filename = "PAH_Stack.jpeg",
        units = "cm",
        dpi = 600)
 
+pah_stack
+
 #Stack Bar of TPH at three sites============
 hc_dry_stack_tph <- hc_dry_norm %>%
   group_by(SiteYear) %>%
@@ -187,6 +194,7 @@ tph_stack <- ggplot(hc_dry_stack_tph, aes(x = TPH_Type, y = content, fill = Site
         legend.position = "bottom",
         strip.text=element_text(size=18))
 
+tph_stack
 #Bind tph and pah_stack together:
 grid.arrange(pah_stack,tph_stack,  ncol = 1)
 g <- arrangeGrob(pah_stack,tph_stack, nrow=2) #generates g
@@ -196,3 +204,55 @@ ggsave(g, filename = "PAH_TPH_Stack.jpeg",
        height = 19,
        units = "cm",
        dpi = 600)
+
+#Core (HC per unit area)=====
+hc <- read.csv("hc.csv") #read in HydroCarbon data
+sc <- read.csv("StonyCreek.csv") # read in CN data
+
+#Dry_Fraction = DryWeight.g/ WetWeight.g
+sc_core <- filter (sc, Elevation =="High" & habitat =="mangrove") %>% #all hc cores were taken at High elevation, keep high only
+ mutate (SliceLength.cm       = DepthTo.cm - DepthFrom.cm, #height of slice which is cylinder
+        SliceVolume.cm3       = (pi*(PipeDiameter.cm/2)^2) * SliceLength.cm,  #cylinder of 5 cm diameter
+        dry_bulk_density.gcm3 = DryWeight.g /SliceVolume.cm3 , #Dry bulk density
+        Core_in.cm            = PipeLenght.cm  - CompactionIn ,#Compaction in cm to get core length in cm
+        Pipe_in.cm            = PipeLenght.cm  - CompactionOut ,#Compaction in cm to get how deep we hammerred pipe in in cm
+        Compaction_Correction_Value = Core_in.cm / Pipe_in.cm, 
+        dry_bulk_density.gcm3_corrected = dry_bulk_density.gcm3 * Compaction_Correction_Value,
+        CarbonDensity.gcm3    = dry_bulk_density.gcm3_corrected * C_percent/100,
+        CarbonStock.Mgha      = CarbonDensity.gcm3 *100 * SliceLength.cm )
+
+#Compute mean dry.fraction + mean C_percent:
+sc_core_high <- sc_core %>% #HC cores were more coarsly sliced and we merge them with sc  cores to get mean dry fraction and C_percent
+  dplyr::group_by(SampleID_hc) %>%
+  summarise_at(vars(C_percent, Dry_Fraction, dry_bulk_density.gcm3_corrected),mean)
+
+View(sc_core_high)
+#Join HC and CN data
+hc_dry_core <- left_join(hc,sc_core_high, by = "SampleID_hc")#join data with Dry Fraction
+View(hc_dry_core )
+
+hc_dry_core_sum <- hc_dry_core %>% 
+  #create function to express HC per Dry.Fraction and normalized to mean C_percent:
+  mutate_at(vars(Naphthalene:Total), function(x, na.rm=T)(x / hc_dry_core$Dry_Fraction ))%>%
+  mutate (HC_SliceLength.cm     = HC_DepthTo.cm - HC_DepthFrom.cm, #height of slice which is cylinder
+          HC_SliceVolume.cm3    = 4 * HC_SliceLength.cm,  #sliced square prims of 2by2cm = 4cm2
+          HC_Fraction = Total / 1000000, 
+          HC_Density.gcm3    = dry_bulk_density.gcm3_corrected *HC_Fraction, #as Total is mg/kg
+          HC_Stock.Mgha      = HC_Density.gcm3 *100 * HC_SliceLength.cm )
+
+
+
+hc_end <- hc_dry_core_sum %>%
+  dplyr::group_by(Site,SiteYear, transect, Elevation) %>% #Grouping by core
+  summarise(HC_Core_Sum.Mgha = sum(HC_Stock.Mgha, na.rm = T))%>%
+  dplyr::group_by (Site) %>%
+  summarise(Mean_Core_HC = mean(HC_Core_Sum.Mgha),
+            sd_core = sd(HC_Core_Sum.Mgha, na.rm=T),
+            N = n(),
+            se_core = sd_core/sqrt(N))
+
+
+hc_end
+
+#Site  Mean_Core_HC sd_core     N se_core
+#Stony         41.9    26.0     9    8.67
