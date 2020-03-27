@@ -102,9 +102,9 @@ h1_plot <- ggplot(h1,aes(x= reorder(HC_Depth_Range, desc(HC_Depth_Range)), y=Mea
         legend.position = "none",
         strip.text=element_text(size=18))
 
-h1_plot
 
-ggsave(filename = "TPH_MeanContentGOOD2.jpeg", 
+
+#ggsave(h1_plot,filename = "TPH_MeanContentGOOD2.jpeg", 
        width = 17, 
        height = 9,
        units = "cm",
@@ -174,7 +174,6 @@ pah_stack <- ggplot(hc_dry_stack_pah, aes(x = PAH_Type, y = content, fill = Site
         legend.position = "none",
         strip.text=element_text(size=18))
 
-pah_stack
 
 #Stack Bar of TPH at three sites:
 hc_dry_stack_tph <- hc_dry_norm %>%
@@ -194,12 +193,10 @@ tph_stack <- ggplot(hc_dry_stack_tph, aes(x = TPH_Type, y = content, fill = Site
         legend.position = "bottom",
         strip.text=element_text(size=18))
 
-tph_stack
 #Bind tph_stack and pah_stack together:
-grid.arrange(pah_stack,tph_stack,  ncol = 1)
-g <- arrangeGrob(pah_stack,tph_stack, nrow=2) #generates g
+#g <- arrangeGrob(pah_stack,tph_stack, nrow=2) #generates g
 
-ggsave(g, filename = "PAH_TPH_Stack.jpeg", 
+#ggsave(g, filename = "PAH_TPH_Stack.jpeg", 
        width = 17, 
        height = 19,
        units = "cm",
@@ -224,13 +221,12 @@ times_above*100/good_total # 79.06977 % of samples were above toxicity threshold
 #HC Stock Tonnes / ha (as  per core) =====
 #We need to compute dry_bulk_density.gcm3 and CarbonStock.Mgha off sc data per core:
 sc_core <- filter (sc, Elevation =="High" & habitat =="mangrove") %>% #all hc cores were taken at High elevation, keep high only
-  mutate (SliceLength.cm       = DepthTo.cm - DepthFrom.cm, #height of slice which is cylinder
-          SliceVolume.cm3       = (pi*(PipeDiameter.cm/2)^2) * SliceLength.cm,  #PVC pipe of 5 cm diameter
-          dry_bulk_density.gcm3 = DryWeight.g /SliceVolume.cm3 , #Dry bulk density
-          Core_in.cm            = PipeLenght.cm  - CompactionIn ,#Compaction in cm to get core length in cm
+  mutate (Core_in.cm            = PipeLenght.cm  - CompactionIn ,#Compaction in cm to get core length in cm
           Pipe_in.cm            = PipeLenght.cm  - CompactionOut ,#Compaction in cm to get how deep we hammerred pipe in in cm
           Compaction_Correction_Value = Core_in.cm / Pipe_in.cm, 
-          dry_bulk_density.gcm3_corrected = dry_bulk_density.gcm3 * Compaction_Correction_Value,
+          SliceLength.cm       = DepthTo.cm - DepthFrom.cm, #height of slice which is cylinder
+          SliceVolume.cm3_corrected       = (pi*(PipeDiameter.cm/2)^2) * SliceLength.cm / Compaction_Correction_Value,  #PVC pipe of 5 cm diameter
+          dry_bulk_density.gcm3_corrected = DryWeight.g /SliceVolume.cm3_corrected , #Dry bulk density corrected for compaction, C-stock normalized to g per cm3
           CarbonDensity.gcm3    = dry_bulk_density.gcm3_corrected * C_percent/100,
           CarbonStock.Mgha      = CarbonDensity.gcm3 *100 * SliceLength.cm )# gcm3 times 100 gives Mgha
 
@@ -240,7 +236,6 @@ sc_core_high <- sc_core %>%
   dplyr::group_by(SampleID_hc) %>% 
   summarise_at(vars(C_percent, Dry_Fraction, dry_bulk_density.gcm3_corrected),mean)
 
-View(sc_core_high)
 
 #Join HC and CN data
 hc_dry_core <- left_join(hc,sc_core_high, by = "SampleID_hc")#join data with Dry Fraction
@@ -249,25 +244,27 @@ names(hc_dry_core )
 hc_dry_core_sum <- hc_dry_core %>% 
   #create function to express HC per Dry.Fraction and normalized to mean C_percent:
   mutate_at(vars(Naphthalene:Total), function(x, na.rm=T)(x / hc_dry_core$Dry_Fraction ))%>%
-  #computer HC stock based on slice parameters:
+  #compute HC stock based on slice parameters:
   mutate (HC_SliceLength.cm     = HC_DepthTo.cm - HC_DepthFrom.cm, #height of slice which is cylinder
           HC_SliceVolume.cm3    = square_cm2 * HC_SliceLength.cm,  #sliced square prims of 2by2cm or 3by3cm bottom
           HC_Fraction = Total / 1000000, #Fraction of total HC in each sample (mg / kg)
           HC_Density.gcm3    = dry_bulk_density.gcm3_corrected *HC_Fraction, #
-          HC_Stock.Mgha      = HC_Density.gcm3 *100 * HC_SliceLength.cm )
-
-View(hc_dry_core_sum)
-
+          HC_Stock.Mgha      = HC_Density.gcm3 *100 * HC_SliceLength.cm,
+          Core_in.mm =(NewDATA$PipeLength.cm *10)  - NewDATA$CompactionIn.mm, #Core length
+          Pipe_in.mm = (NewDATA$PipeLength.cm *10)  - NewDATA$CompactionOut.mm,  #Lenght of pipe in the sediments
+          Compaction_Correction_Value = Core_in.mm/Pipe_in.mm,
+          #To normalize divide HC_Stock.Mgha by compaction-corrected volume:
+          HC_SliceLength.cm_corrected   =  HC_SliceLength.cm / Compaction_Correction_Value
+          HC_Stock.Mgha.normalized = 
 #Sum up HC_Stock.Mgha per each core:
 hc_end <- hc_dry_core_sum %>%
   dplyr::group_by(Site,SiteYear, transect, Elevation) %>% #Grouping by core
   summarise(HC_Core_Sum.Mgha = sum(HC_Stock.Mgha, na.rm = T))%>% #summing up per core
-  dplyr::group_by (SiteYear) %>% #grouping per site
+  dplyr::group_by (Site) %>% #grouping per site
   summarise(Mean_Core_HC = mean(HC_Core_Sum.Mgha), #computing mean HC_Stock.Mgha per SiteYear
             sd_core = sd(HC_Core_Sum.Mgha, na.rm=T),
             N = n(),
             se_core = sd_core/sqrt(N))
-
 
 hc_end
 #####SiteYear  Mean_Core_HC sd_core   N se_core
